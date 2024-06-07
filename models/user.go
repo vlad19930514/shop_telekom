@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"errors"
 
 	"github.com/vlad19930514/shop_telekom/db"
@@ -8,53 +9,58 @@ import (
 )
 
 type User struct {
-	ID       int64
-	Email    string `binding:"required"`
-	Password string `binding:"required"`
+	ID                int64
+	Email             string
+	Password          string
+	Username          string
+	Is_email_verified bool
 }
 
-func (u User) Save() error {
-	query := "INSERT INTO users(email, password) VALUES (?, ?)"
-	stmt, err := db.DB.Prepare(query)
+func (u User) Save(ctx context.Context) error {
 
-	if err != nil {
-		return err
-	}
-
-	defer stmt.Close()
+	const createUser = `INSERT INTO users
+		(email, password)
+		VALUES($1, $2);`
 
 	hashedPassword, err := utils.HashPassword(u.Password)
 
 	if err != nil {
 		return err
 	}
-
-	result, err := stmt.Exec(u.Email, hashedPassword)
-
+	_, err = db.ConnPool.Exec(ctx, createUser, u.Email, hashedPassword)
 	if err != nil {
 		return err
 	}
-
-	userId, err := result.LastInsertId()
-
-	u.ID = userId
-	return err
+	return nil
 }
-func (u User) ValidateCredentials() error {
-	query := "SELECT id, password FROM users WHERE email = ?"
-	row := db.DB.QueryRow(query, u.Email)
+func (u *User) ValidateCredentials(ctx context.Context) error {
+	query := "SELECT email, password, id, username FROM users WHERE email=$1"
+
+	row := db.ConnPool.QueryRow(ctx, query, u.Email)
 
 	var retrievedPassword string
-	err := row.Scan(&u.ID, &retrievedPassword)
+	err := row.Scan(&u.Email, &retrievedPassword, &u.ID, &u.Username)
 
 	if err != nil {
-		return errors.New("Credentials invalid")
+		return errors.New("credentials invalid")
 	}
 
 	passwordIsValid := utils.CheckPasswordHash(u.Password, retrievedPassword)
 
 	if !passwordIsValid {
-		return errors.New("Credentials invalid")
+		return errors.New("credentials invalid")
+	}
+
+	return nil
+}
+func (u User) ChangeUsername(ctx context.Context) error {
+
+	query := "update users set username=$1 where id=$2"
+
+	_, err := db.ConnPool.Exec(ctx, query, u.Username, u.ID)
+
+	if err != nil {
+		return errors.New("can't update username ")
 	}
 
 	return nil

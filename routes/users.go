@@ -18,7 +18,7 @@ func signup(context *gin.Context) {
 		return
 	}
 
-	err = user.Save()
+	err = user.Save(context)
 
 	if err != nil {
 		context.JSON(http.StatusInternalServerError, gin.H{"message": "Could not save user."})
@@ -38,7 +38,7 @@ func login(context *gin.Context) {
 		return
 	}
 
-	err = user.ValidateCredentials()
+	err = user.ValidateCredentials(context)
 
 	if err != nil {
 		context.JSON(http.StatusUnauthorized, gin.H{"message": "Could not authenticate user."})
@@ -52,5 +52,20 @@ func login(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, gin.H{"message": "Login successful!", "token": token})
+	context.JSON(http.StatusOK, gin.H{"message": "Login successful!", "token": token, "username": user.Username})
+}
+
+func UpdateName(context *gin.Context) {
+	var user models.User
+	userId := context.GetInt64("ID")
+	user.ID = userId
+
+	err := context.ShouldBindJSON(&user)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"message": "Could not parse request data."})
+		return
+	}
+
+	user.ChangeUsername(context)
+
 }
